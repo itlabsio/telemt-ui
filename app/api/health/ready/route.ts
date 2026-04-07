@@ -3,22 +3,22 @@
 // No authentication required — must be reachable by the kubelet.
 
 import { NextResponse } from "next/server";
+import { primaryBackend } from "@/lib/backends";
 
 export const dynamic = "force-dynamic";
 
-const BASE_URL = (process.env.TELEMT_API_BASE_URL ?? "http://127.0.0.1:9091").replace(/\/$/, "");
-const AUTH_HEADER = process.env.TELEMT_API_AUTH_HEADER ?? "";
 const TIMEOUT_MS = 5_000;
 
 export async function GET() {
+  const backend = primaryBackend();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (AUTH_HEADER) headers["Authorization"] = AUTH_HEADER;
+    if (backend.authHeader) headers["Authorization"] = backend.authHeader;
 
-    const res = await fetch(`${BASE_URL}/v1/health`, {
+    const res = await fetch(`${backend.baseUrl}/v1/health`, {
       method: "GET",
       headers,
       cache: "no-store",

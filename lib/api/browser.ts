@@ -1,6 +1,6 @@
 // Browser-side Telemt API client.
-// All requests are sent to the /api/telemt proxy route handler which injects
-// the backend Authorization header server-side.
+// All requests are sent to the /api/telemt/<serverIndex>/v1/... proxy route
+// handler which injects the backend Authorization header server-side.
 
 import type {
   ApiResponse,
@@ -30,8 +30,10 @@ import type {
   PatchUserRequest,
 } from "@/types/api";
 
-// Proxy base — requests go to the Next.js route handler, not directly to backend.
-const PROXY = "/api/telemt";
+// Returns the proxy base URL for a given backend index.
+function proxyBase(serverIndex: number): string {
+  return `/api/telemt/${serverIndex}`;
+}
 
 export class BrowserApiError extends Error {
   constructor(
@@ -57,8 +59,8 @@ async function parseResponse<T>(res: Response): Promise<SuccessEnvelope<T>> {
   return body;
 }
 
-async function get<T>(path: string): Promise<SuccessEnvelope<T>> {
-  const res = await fetch(`${PROXY}${path}`, {
+async function get<T>(serverIndex: number, path: string): Promise<SuccessEnvelope<T>> {
+  const res = await fetch(`${proxyBase(serverIndex)}${path}`, {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
@@ -67,6 +69,7 @@ async function get<T>(path: string): Promise<SuccessEnvelope<T>> {
 }
 
 async function mutate<TReq, TRes>(
+  serverIndex: number,
   method: "POST" | "PATCH" | "DELETE",
   path: string,
   body?: TReq,
@@ -78,7 +81,7 @@ async function mutate<TReq, TRes>(
   };
   if (ifMatch) headers["If-Match"] = ifMatch;
 
-  const res = await fetch(`${PROXY}${path}`, {
+  const res = await fetch(`${proxyBase(serverIndex)}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -87,52 +90,61 @@ async function mutate<TReq, TRes>(
   return parseResponse<TRes>(res);
 }
 
-// SWR fetcher — returns unwrapped data for a given proxy path.
-export async function swrFetcher<T>(path: string): Promise<T> {
-  const envelope = await get<T>(path);
-  return envelope.data;
+// Creates a scoped API client bound to a specific backend server index.
+// All method signatures remain identical to the previous single-server API.
+export function createBrowserApi(serverIndex: number) {
+  const g = <T>(path: string) => get<T>(serverIndex, path);
+  const m = <TReq, TRes>(
+    method: "POST" | "PATCH" | "DELETE",
+    path: string,
+    body?: TReq,
+    ifMatch?: string
+  ) => mutate<TReq, TRes>(serverIndex, method, path, body, ifMatch);
+
+  return {
+    health: () => g<HealthData>("/v1/health"),
+    systemInfo: () => g<SystemInfoData>("/v1/system/info"),
+    runtimeGates: () => g<RuntimeGatesData>("/v1/runtime/gates"),
+    runtimeInitialization: () => g<RuntimeInitializationData>("/v1/runtime/initialization"),
+    statsSummary: () => g<SummaryData>("/v1/stats/summary"),
+    statsZeroAll: () => g<ZeroAllData>("/v1/stats/zero/all"),
+    statsUpstreams: () => g<UpstreamsData>("/v1/stats/upstreams"),
+    statsMinimalAll: () => g<MinimalAllData>("/v1/stats/minimal/all"),
+    statsMeWriters: () => g<MeWritersData>("/v1/stats/me-writers"),
+    statsDcs: () => g<DcStatusData>("/v1/stats/dcs"),
+    runtimeMePoolState: () => g<RuntimeMePoolStateData>("/v1/runtime/me_pool_state"),
+    runtimeMeQuality: () => g<RuntimeMeQualityData>("/v1/runtime/me_quality"),
+    runtimeUpstreamQuality: () => g<RuntimeUpstreamQualityData>("/v1/runtime/upstream_quality"),
+    runtimeNatStun: () => g<RuntimeNatStunData>("/v1/runtime/nat_stun"),
+    runtimeMeSelftest: () => g<RuntimeMeSelftestData>("/v1/runtime/me-selftest"),
+    runtimeEdgeConnectionsSummary: () =>
+      g<RuntimeEdgeConnectionsSummaryData>("/v1/runtime/connections/summary"),
+    runtimeEdgeEvents: (limit?: number) =>
+      g<RuntimeEdgeEventsData>(
+        `/v1/runtime/events/recent${limit !== undefined ? `?limit=${limit}` : ""}`
+      ),
+    securityPosture: () => g<SecurityPostureData>("/v1/security/posture"),
+    securityWhitelist: () => g<SecurityWhitelistData>("/v1/security/whitelist"),
+    listUsers: () => g<UserInfo[]>("/v1/users"),
+    getUser: (username: string) => g<UserInfo>(`/v1/users/${encodeURIComponent(username)}`),
+    createUser: (req: CreateUserRequest, ifMatch?: string) =>
+      m<CreateUserRequest, CreateUserResponse>("POST", "/v1/users", req, ifMatch),
+    patchUser: (username: string, req: PatchUserRequest, ifMatch?: string) =>
+      m<PatchUserRequest, UserInfo>(
+        "PATCH",
+        `/v1/users/${encodeURIComponent(username)}`,
+        req,
+        ifMatch
+      ),
+    deleteUser: (username: string, ifMatch?: string) =>
+      m<undefined, string>(
+        "DELETE",
+        `/v1/users/${encodeURIComponent(username)}`,
+        undefined,
+        ifMatch
+      ),
+  };
 }
 
-export const browserApi = {
-  health: () => get<HealthData>("/v1/health"),
-  systemInfo: () => get<SystemInfoData>("/v1/system/info"),
-  runtimeGates: () => get<RuntimeGatesData>("/v1/runtime/gates"),
-  runtimeInitialization: () => get<RuntimeInitializationData>("/v1/runtime/initialization"),
-  statsSummary: () => get<SummaryData>("/v1/stats/summary"),
-  statsZeroAll: () => get<ZeroAllData>("/v1/stats/zero/all"),
-  statsUpstreams: () => get<UpstreamsData>("/v1/stats/upstreams"),
-  statsMinimalAll: () => get<MinimalAllData>("/v1/stats/minimal/all"),
-  statsMeWriters: () => get<MeWritersData>("/v1/stats/me-writers"),
-  statsDcs: () => get<DcStatusData>("/v1/stats/dcs"),
-  runtimeMePoolState: () => get<RuntimeMePoolStateData>("/v1/runtime/me_pool_state"),
-  runtimeMeQuality: () => get<RuntimeMeQualityData>("/v1/runtime/me_quality"),
-  runtimeUpstreamQuality: () => get<RuntimeUpstreamQualityData>("/v1/runtime/upstream_quality"),
-  runtimeNatStun: () => get<RuntimeNatStunData>("/v1/runtime/nat_stun"),
-  runtimeMeSelftest: () => get<RuntimeMeSelftestData>("/v1/runtime/me-selftest"),
-  runtimeEdgeConnectionsSummary: () =>
-    get<RuntimeEdgeConnectionsSummaryData>("/v1/runtime/connections/summary"),
-  runtimeEdgeEvents: (limit?: number) =>
-    get<RuntimeEdgeEventsData>(
-      `/v1/runtime/events/recent${limit !== undefined ? `?limit=${limit}` : ""}`
-    ),
-  securityPosture: () => get<SecurityPostureData>("/v1/security/posture"),
-  securityWhitelist: () => get<SecurityWhitelistData>("/v1/security/whitelist"),
-  listUsers: () => get<UserInfo[]>("/v1/users"),
-  getUser: (username: string) => get<UserInfo>(`/v1/users/${encodeURIComponent(username)}`),
-  createUser: (req: CreateUserRequest, ifMatch?: string) =>
-    mutate<CreateUserRequest, CreateUserResponse>("POST", "/v1/users", req, ifMatch),
-  patchUser: (username: string, req: PatchUserRequest, ifMatch?: string) =>
-    mutate<PatchUserRequest, UserInfo>(
-      "PATCH",
-      `/v1/users/${encodeURIComponent(username)}`,
-      req,
-      ifMatch
-    ),
-  deleteUser: (username: string, ifMatch?: string) =>
-    mutate<undefined, string>(
-      "DELETE",
-      `/v1/users/${encodeURIComponent(username)}`,
-      undefined,
-      ifMatch
-    ),
-};
+// Default single-server client for backward compatibility (index 0).
+export const browserApi = createBrowserApi(0);

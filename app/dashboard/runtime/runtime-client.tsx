@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { StatusIndicator } from "@/components/dashboard/status-indicator";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
+import { useServerIndex } from "@/lib/use-server-index";
 import { formatMs, formatNum, formatEpoch, formatPct, formatBytes } from "@/lib/fmt";
 import {
   Table,
@@ -25,14 +26,17 @@ function useSWRData<T>(key: string, fetcher: () => Promise<{ data: T }>) {
 }
 
 export default function RuntimeClient() {
-  const { data: mePool, mutate: m1 } = useSWRData("mePool", browserApi.runtimeMePoolState);
-  const { data: meQuality, mutate: m2 } = useSWRData("meQuality", browserApi.runtimeMeQuality);
-  const { data: selftest, mutate: m3 } = useSWRData("selftest", browserApi.runtimeMeSelftest);
-  const { data: natStun, mutate: m4 } = useSWRData("natStun", browserApi.runtimeNatStun);
-  const { mutate: m5 } = useSWRData("upstreamQ", browserApi.runtimeUpstreamQuality);
-  const { data: edgeConn, mutate: m6 } = useSWRData("edgeConn", browserApi.runtimeEdgeConnectionsSummary);
-  const { data: events, mutate: m7 } = useSWRData("events", () => browserApi.runtimeEdgeEvents(100));
-  const { data: init, mutate: m8 } = useSWRData("init", browserApi.runtimeInitialization);
+  const [serverIndex] = useServerIndex();
+  const api = createBrowserApi(serverIndex);
+
+  const { data: mePool, mutate: m1 } = useSWRData(`${serverIndex}:mePool`, api.runtimeMePoolState);
+  const { data: meQuality, mutate: m2 } = useSWRData(`${serverIndex}:meQuality`, api.runtimeMeQuality);
+  const { data: selftest, mutate: m3 } = useSWRData(`${serverIndex}:selftest`, api.runtimeMeSelftest);
+  const { data: natStun, mutate: m4 } = useSWRData(`${serverIndex}:natStun`, api.runtimeNatStun);
+  const { mutate: m5 } = useSWRData(`${serverIndex}:upstreamQ`, api.runtimeUpstreamQuality);
+  const { data: edgeConn, mutate: m6 } = useSWRData(`${serverIndex}:edgeConn`, api.runtimeEdgeConnectionsSummary);
+  const { data: events, mutate: m7 } = useSWRData(`${serverIndex}:events`, () => api.runtimeEdgeEvents(100));
+  const { data: init, mutate: m8 } = useSWRData(`${serverIndex}:init`, api.runtimeInitialization);
 
   const refresh = useCallback(() => {
     m1(); m2(); m3(); m4(); m5(); m6(); m7(); m8();

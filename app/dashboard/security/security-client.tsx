@@ -8,14 +8,14 @@ import {
   Lock,
   Unlock,
   Eye,
-  EyeOff,
   AlertTriangle,
 } from "lucide-react";
 import { Topbar, RefreshButton } from "@/components/layout/topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/dashboard/status-indicator";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
+import { useServerIndex } from "@/lib/use-server-index";
 import { formatEpoch } from "@/lib/fmt";
 
 const POLL = 15_000;
@@ -27,11 +27,14 @@ function useSWRData<T>(key: string, fetcher: () => Promise<{ data: T }>) {
 }
 
 export default function SecurityClient() {
-  const { data: posture, mutate: m1 } = useSWRData("posture", browserApi.securityPosture);
-  const { data: whitelist, mutate: m2 } = useSWRData("whitelist", browserApi.securityWhitelist);
+  const [serverIndex] = useServerIndex();
+  const api = createBrowserApi(serverIndex);
+
+  const { data: posture, mutate: m1 } = useSWRData(`${serverIndex}:posture`, api.securityPosture);
+  const { data: whitelist, mutate: m2 } = useSWRData(`${serverIndex}:whitelist`, api.securityWhitelist);
   const { data: limits, mutate: m3 } = useSWRData(
-    "effectiveLimits",
-    browserApi.runtimeUpstreamQuality
+    `${serverIndex}:effectiveLimits`,
+    api.runtimeUpstreamQuality
   );
 
   const refresh = useCallback(() => {
@@ -246,22 +249,20 @@ export default function SecurityClient() {
               ].map(({ label, ok, critical }) => (
                 <div key={label} className="flex items-center gap-3">
                   <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      ok
-                        ? "bg-[var(--color-success)]"
-                        : critical
-                          ? "bg-[var(--color-destructive)]"
-                          : "bg-[var(--color-warning)]"
-                    }`}
+                    className={`h-2 w-2 shrink-0 rounded-full ${ok
+                      ? "bg-[var(--color-success)]"
+                      : critical
+                        ? "bg-[var(--color-destructive)]"
+                        : "bg-[var(--color-warning)]"
+                      }`}
                   />
                   <span
-                    className={`text-sm ${
-                      ok
-                        ? "text-[var(--color-foreground)]"
-                        : critical
-                          ? "text-[var(--color-destructive)]"
-                          : "text-[var(--color-warning)]"
-                    }`}
+                    className={`text-sm ${ok
+                      ? "text-[var(--color-foreground)]"
+                      : critical
+                        ? "text-[var(--color-destructive)]"
+                        : "text-[var(--color-warning)]"
+                      }`}
                   >
                     {label}
                   </span>

@@ -5,7 +5,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
 import type { CreateUserResponse } from "@/types/api";
 import { Copy, CheckCircle2 } from "lucide-react";
 
@@ -14,6 +14,7 @@ interface CreateUserDialogProps {
   onClose: () => void;
   onCreated: () => void;
   currentRevision?: string;
+  serverIndex?: number;
 }
 
 interface FormState {
@@ -41,7 +42,9 @@ export function CreateUserDialog({
   onClose,
   onCreated,
   currentRevision,
+  serverIndex = 0,
 }: CreateUserDialogProps) {
+  const api = createBrowserApi(serverIndex);
   const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Partial<FormState>>({});
   const [loading, setLoading] = useState(false);
@@ -92,7 +95,7 @@ export function CreateUserDialog({
     setLoading(true);
     setApiError(null);
     try {
-      const res = await browserApi.createUser(
+      const res = await api.createUser(
         {
           username: form.username.trim(),
           ...(form.secret ? { secret: form.secret } : {}),

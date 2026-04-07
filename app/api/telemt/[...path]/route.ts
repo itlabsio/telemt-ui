@@ -1,16 +1,19 @@
-// Transparent proxy route handler.
-// Forwards authenticated browser requests to the Telemt backend API,
-// injecting the backend Authorization header server-side so it is never
-// exposed to the browser.
+// Transparent proxy route handler with multi-backend support.
+//
+// URL scheme:
+//   /api/telemt/<serverIndex>/v1/<endpoint>
+//
+// <serverIndex> is the 0-based backend index configured via TELEMT_API_BASE_URL_N.
+// The backend Authorization header is injected server-side and never sent to
+// the browser.
 
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { getBackend } from "@/lib/backends";
 
-const BASE_URL = (process.env.TELEMT_API_BASE_URL ?? "http://127.0.0.1:9091").replace(/\/$/, "");
-const AUTH_HEADER = process.env.TELEMT_API_AUTH_HEADER ?? "";
 const TIMEOUT_MS = 15_000;
 
-// Restrict proxied paths to the known /v1 prefix to prevent SSRF.
+// Only paths starting with /v1/ are forwarded to prevent SSRF.
 function isAllowedPath(path: string): boolean {
   return path.startsWith("/v1/");
 }
@@ -24,7 +27,26 @@ async function proxyRequest(req: NextRequest, segments: string[]): Promise<NextR
     );
   }
 
-  const upstreamPath = `/${segments.join("/")}${req.nextUrl.search}`;
+  // First segment is the backend index, the rest form the upstream path.
+  const [serverIndexStr, ...pathSegments] = segments;
+  const serverIndex = Number(serverIndexStr);
+
+  if (!Number.isInteger(serverIndex) || serverIndex < 0) {
+    return NextResponse.json(
+      { ok: false, error: { code: "bad_request", message: "Invalid server index" } },
+      { status: 400 }
+    );
+  }
+
+  const backend = getBackend(serverIndex);
+  if (!backend) {
+    return NextResponse.json(
+      { ok: false, error: { code: "not_found", message: `Backend ${serverIndex} not configured` } },
+      { status: 404 }
+    );
+  }
+
+  const upstreamPath = `/${pathSegments.join("/")}${req.nextUrl.search}`;
   if (!isAllowedPath(upstreamPath)) {
     return NextResponse.json(
       { ok: false, error: { code: "forbidden", message: "Path not allowed" } },
@@ -36,7 +58,7 @@ async function proxyRequest(req: NextRequest, segments: string[]): Promise<NextR
     "Content-Type": "application/json; charset=utf-8",
     Accept: "application/json",
   };
-  if (AUTH_HEADER) headers["Authorization"] = AUTH_HEADER;
+  if (backend.authHeader) headers["Authorization"] = backend.authHeader;
 
   const ifMatch = req.headers.get("if-match");
   if (ifMatch) headers["If-Match"] = ifMatch;
@@ -50,7 +72,7 @@ async function proxyRequest(req: NextRequest, segments: string[]): Promise<NextR
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(`${BASE_URL}${upstreamPath}`, {
+    const upstream = await fetch(`${backend.baseUrl}${upstreamPath}`, {
       method: req.method,
       headers,
       body,

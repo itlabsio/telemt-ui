@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
 import type { UserInfo } from "@/types/api";
 
 interface EditUserDialogProps {
@@ -13,6 +13,7 @@ interface EditUserDialogProps {
   onClose: () => void;
   onSaved: () => void;
   currentRevision?: string;
+  serverIndex?: number;
 }
 
 interface FormState {
@@ -43,7 +44,9 @@ export function EditUserDialog({
   onClose,
   onSaved,
   currentRevision,
+  serverIndex = 0,
 }: EditUserDialogProps) {
+  const api = createBrowserApi(serverIndex);
   const [form, setForm] = useState<FormState>({
     secret: "",
     user_ad_tag: "",
@@ -102,7 +105,7 @@ export function EditUserDialog({
     setLoading(true);
     setApiError(null);
     try {
-      await browserApi.patchUser(
+      await api.patchUser(
         user.username,
         {
           ...(form.secret ? { secret: form.secret } : {}),

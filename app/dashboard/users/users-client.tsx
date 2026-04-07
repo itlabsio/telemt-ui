@@ -11,12 +11,16 @@ import { UserTable } from "@/components/users/user-table";
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
 import { EditUserDialog } from "@/components/users/edit-user-dialog";
 import { DeleteUserDialog } from "@/components/users/delete-user-dialog";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
+import { useServerIndex } from "@/lib/use-server-index";
 import type { UserInfo, HealthData } from "@/types/api";
 
 const POLL_INTERVAL = 10_000;
 
 export default function UsersClient() {
+  const [serverIndex] = useServerIndex();
+  const api = createBrowserApi(serverIndex);
+
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
@@ -27,13 +31,13 @@ export default function UsersClient() {
     error: usersError,
     isLoading: usersLoading,
     mutate: mutateUsers,
-  } = useSWR("/v1/users", () => browserApi.listUsers(), {
+  } = useSWR([serverIndex, "/v1/users"], () => api.listUsers(), {
     refreshInterval: POLL_INTERVAL,
   });
 
   const {
     data: healthEnvelope,
-  } = useSWR("/v1/health", () => browserApi.health(), {
+  } = useSWR([serverIndex, "/v1/health"], () => api.health(), {
     refreshInterval: POLL_INTERVAL,
   });
 
@@ -114,6 +118,7 @@ export default function UsersClient() {
         onClose={() => setShowCreate(false)}
         onCreated={refresh}
         currentRevision={revision}
+        serverIndex={serverIndex}
       />
 
       <EditUserDialog
@@ -122,6 +127,7 @@ export default function UsersClient() {
         onClose={() => setEditUser(null)}
         onSaved={refresh}
         currentRevision={revision}
+        serverIndex={serverIndex}
       />
 
       <DeleteUserDialog
@@ -130,6 +136,7 @@ export default function UsersClient() {
         onClose={() => setDeleteUser(null)}
         onDeleted={refresh}
         currentRevision={revision}
+        serverIndex={serverIndex}
       />
     </>
   );

@@ -14,8 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { browserApi } from "@/lib/api/browser";
-import { formatNum, formatMs, formatPct, formatBytes } from "@/lib/fmt";
+import { createBrowserApi } from "@/lib/api/browser";
+import { useServerIndex } from "@/lib/use-server-index";
+import { formatNum, formatMs, formatPct } from "@/lib/fmt";
 
 const POLL = 10_000;
 
@@ -26,10 +27,13 @@ function useSWRData<T>(key: string, fetcher: () => Promise<{ data: T }>) {
 }
 
 export default function StatsClient() {
-  const { data: zero, mutate: m1 } = useSWRData("zeroAll", browserApi.statsZeroAll);
-  const { data: upstreams, mutate: m2 } = useSWRData("upstreams", browserApi.statsUpstreams);
-  const { data: dcs, mutate: m3 } = useSWRData("dcs", browserApi.statsDcs);
-  const { data: writers, mutate: m4 } = useSWRData("meWriters", browserApi.statsMeWriters);
+  const [serverIndex] = useServerIndex();
+  const api = createBrowserApi(serverIndex);
+
+  const { data: zero, mutate: m1 } = useSWRData(`${serverIndex}:zeroAll`, api.statsZeroAll);
+  const { data: upstreams, mutate: m2 } = useSWRData(`${serverIndex}:upstreams`, api.statsUpstreams);
+  const { data: dcs, mutate: m3 } = useSWRData(`${serverIndex}:dcs`, api.statsDcs);
+  const { data: writers, mutate: m4 } = useSWRData(`${serverIndex}:meWriters`, api.statsMeWriters);
 
   const refresh = useCallback(() => {
     m1(); m2(); m3(); m4();
@@ -158,15 +162,14 @@ export default function StatsClient() {
                   <div key={label} className="flex justify-between">
                     <span className="text-[var(--color-muted-foreground)]">{label}</span>
                     <span
-                      className={`font-mono tabular-nums ${
-                        value > 0 &&
+                      className={`font-mono tabular-nums ${value > 0 &&
                         (label.includes("drift") ||
                           label.includes("reject") ||
                           label.includes("drop") ||
                           label.includes("quarantine"))
-                          ? "text-[var(--color-warning)]"
-                          : ""
-                      }`}
+                        ? "text-[var(--color-warning)]"
+                        : ""
+                        }`}
                     >
                       {formatNum(value)}
                     </span>
@@ -178,7 +181,7 @@ export default function StatsClient() {
                     <p className="text-xs font-medium text-[var(--color-foreground)] mb-1">
                       Handshake error codes
                     </p>
-                    {zero.middle_proxy.handshake_error_codes.map((ec) => (
+                    {zero.middle_proxy.handshake_error_codes.map((ec: import("@/types/api").ZeroCodeCount) => (
                       <div key={ec.code} className="flex justify-between text-xs">
                         <span className="font-mono text-[var(--color-muted-foreground)]">
                           code {ec.code}
@@ -262,16 +265,15 @@ export default function StatsClient() {
                       label: "Direct / SOCKS4 / SOCKS5 / SS",
                       value: `${upstreams.summary.direct_total} / ${upstreams.summary.socks4_total} / ${upstreams.summary.socks5_total} / ${upstreams.summary.shadowsocks_total}`,
                     },
-                  ].map(({ label, value, accent }) => (
+                  ].map(({ label, value, accent }: { label: string; value: string | number; accent?: "success" | "warning" }) => (
                     <div key={label} className="rounded-lg bg-[var(--color-secondary)]/40 p-3">
                       <p
-                        className={`text-lg font-bold tabular-nums ${
-                          accent === "success"
-                            ? "text-[var(--color-success)]"
-                            : accent === "warning"
-                              ? "text-[var(--color-warning)]"
-                              : "text-[var(--color-foreground)]"
-                        }`}
+                        className={`text-lg font-bold tabular-nums ${accent === "success"
+                          ? "text-[var(--color-success)]"
+                          : accent === "warning"
+                            ? "text-[var(--color-warning)]"
+                            : "text-[var(--color-foreground)]"
+                          }`}
                       >
                         {value}
                       </p>
@@ -296,7 +298,7 @@ export default function StatsClient() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {upstreams.upstreams.map((u) => (
+                    {upstreams.upstreams.map((u: import("@/types/api").UpstreamStatus) => (
                       <TableRow key={u.upstream_id}>
                         <TableCell className="font-mono text-xs text-[var(--color-muted-foreground)]">
                           {u.upstream_id}
@@ -358,7 +360,7 @@ export default function StatsClient() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dcs.dcs.map((dc) => (
+                  {dcs.dcs.map((dc: import("@/types/api").DcStatus) => (
                     <TableRow key={dc.dc}>
                       <TableCell className="font-mono font-semibold">{dc.dc}</TableCell>
                       <TableCell className="tabular-nums text-xs">
@@ -458,7 +460,7 @@ export default function StatsClient() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {writers.writers.map((w) => (
+                    {writers.writers.map((w: import("@/types/api").MeWriterStatus) => (
                       <TableRow key={w.writer_id}>
                         <TableCell className="font-mono text-xs">{w.writer_id}</TableCell>
                         <TableCell className="font-mono">{w.dc ?? "—"}</TableCell>

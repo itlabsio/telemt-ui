@@ -1,7 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -12,8 +13,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ServerSelector } from "@/components/layout/server-selector";
+import { SERVER_PARAM } from "@/lib/use-server-index";
 
-const NAV_ITEMS = [
+const NAV_BASES = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/users", label: "Users", icon: Users },
   { href: "/dashboard/runtime", label: "Runtime", icon: Activity },
@@ -26,9 +29,42 @@ interface SidebarProps {
   userEmail?: string | null;
 }
 
-export function Sidebar({ userName, userEmail }: SidebarProps) {
+// Inner component that reads search params (needs Suspense boundary).
+function SidebarNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
+  // Preserve the ?srv= param when navigating between dashboard pages.
+  const srv = searchParams.get(SERVER_PARAM);
+  const srvSuffix = srv ? `?${SERVER_PARAM}=${srv}` : "";
+
+  return (
+    <ul className="space-y-0.5">
+      {NAV_BASES.map(({ href, label, icon: Icon, exact }) => {
+        const active = exact ? pathname === href : pathname.startsWith(href);
+        return (
+          <li key={href}>
+            <Link
+              href={`${href}${srvSuffix}`}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                active
+                  ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-medium"
+                  : "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+              {active && <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function Sidebar({ userName, userEmail }: SidebarProps) {
   return (
     <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-background)]">
       {/* Logo */}
@@ -41,29 +77,15 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <ul className="space-y-0.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                    active
-                      ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-medium"
-                      : "text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                  {active && <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <Suspense fallback={null}>
+          <SidebarNav />
+        </Suspense>
       </nav>
+
+      {/* Server selector — hidden when only one backend is configured */}
+      <Suspense fallback={null}>
+        <ServerSelector />
+      </Suspense>
 
       {/* User footer */}
       <div className="border-t border-[var(--color-border)] px-3 py-3">

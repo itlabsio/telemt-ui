@@ -15,7 +15,7 @@ import { StatusIndicator } from "@/components/dashboard/status-indicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { serverApi } from "@/lib/api/server";
+import { createServerApi } from "@/lib/api/server";
 import { formatUptime, formatEpoch, formatNum, formatPct } from "@/lib/fmt";
 
 export const metadata: Metadata = { title: "Overview" };
@@ -29,13 +29,21 @@ async function safeGet<T>(promise: Promise<{ data: T }>): Promise<T | null> {
   }
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ srv?: string }>;
+}) {
+  const { srv } = await searchParams;
+  const serverIndex = srv !== undefined && /^\d+$/.test(srv) ? Number(srv) : 0;
+  const api = createServerApi(serverIndex);
+
   const [health, systemInfo, gates, summary, minimalAll] = await Promise.all([
-    safeGet(serverApi.health()),
-    safeGet(serverApi.systemInfo()),
-    safeGet(serverApi.runtimeGates()),
-    safeGet(serverApi.statsSummary()),
-    safeGet(serverApi.statsMinimalAll()),
+    safeGet(api.health()),
+    safeGet(api.systemInfo()),
+    safeGet(api.runtimeGates()),
+    safeGet(api.statsSummary()),
+    safeGet(api.statsMinimalAll()),
   ]);
 
   const isHealthy =
@@ -67,11 +75,10 @@ export default async function DashboardPage() {
         {/* Health banner */}
         {health && (
           <div
-            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${
-              isHealthy
-                ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[var(--color-success)]"
-                : "border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/8 text-[var(--color-destructive)]"
-            }`}
+            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${isHealthy
+              ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[var(--color-success)]"
+              : "border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/8 text-[var(--color-destructive)]"
+              }`}
           >
             {isHealthy ? (
               <CheckCircle2 className="h-4 w-4 shrink-0" />

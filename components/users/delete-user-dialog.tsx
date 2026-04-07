@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { browserApi } from "@/lib/api/browser";
+import { createBrowserApi } from "@/lib/api/browser";
 import type { UserInfo } from "@/types/api";
 
 interface DeleteUserDialogProps {
@@ -13,6 +13,7 @@ interface DeleteUserDialogProps {
   onClose: () => void;
   onDeleted: () => void;
   currentRevision?: string;
+  serverIndex?: number;
 }
 
 export function DeleteUserDialog({
@@ -21,7 +22,9 @@ export function DeleteUserDialog({
   onClose,
   onDeleted,
   currentRevision,
+  serverIndex = 0,
 }: DeleteUserDialogProps) {
+  const api = createBrowserApi(serverIndex);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -31,7 +34,7 @@ export function DeleteUserDialog({
     setLoading(true);
     setApiError(null);
     try {
-      await browserApi.deleteUser(user!.username, currentRevision);
+      await api.deleteUser(user!.username, currentRevision);
       onDeleted();
       onClose();
     } catch (err) {
