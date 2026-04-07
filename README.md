@@ -84,16 +84,17 @@ TELEMT_API_LABEL_2=Staging
 
 #### OIDC и Auth.js
 
-| Переменная                   | Обязательная | Описание                                                    |
-| ---------------------------- | ------------ | ----------------------------------------------------------- |
-| `OIDC_ISSUER`                | да           | Issuer URL провайдера (`/.well-known/openid-configuration`) |
-| `OIDC_CLIENT_ID`             | да           | Client ID приложения                                        |
-| `OIDC_CLIENT_SECRET`         | да           | Client Secret приложения                                    |
-| `OIDC_SCOPE`                 | нет          | OIDC scopes, по умолчанию `openid profile email`            |
-| `OIDC_ALLOWED_EMAIL_DOMAINS` | нет          | Допустимые домены email через запятую. Пусто — все          |
-| `OIDC_ALLOW_GROUPS`          | нет          | Допустимые OIDC-группы через запятую. Пусто — все           |
-| `AUTH_SECRET`                | да           | Секрет для подписи JWT сессий (`openssl rand -base64 32`)   |
-| `NEXTAUTH_URL`               | да           | Публичный URL приложения, например `http://localhost:3000`  |
+| Переменная                   | Обязательная | Описание                                                                                             |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `OIDC_ISSUER`                | да           | Issuer URL провайдера (`/.well-known/openid-configuration`)                                          |
+| `OIDC_CLIENT_ID`             | да           | Client ID приложения                                                                                 |
+| `OIDC_CLIENT_SECRET`         | да           | Client Secret приложения                                                                             |
+| `OIDC_SCOPE`                 | нет          | OIDC scopes, по умолчанию `openid profile email`                                                     |
+| `OIDC_ALLOWED_EMAIL_DOMAINS` | нет          | Допустимые домены email через запятую. Пусто — все                                                   |
+| `OIDC_ALLOW_GROUPS`          | нет          | Допустимые OIDC-группы через запятую. Пусто — все                                                    |
+| `AUTH_SECRET`                | да           | Секрет для подписи JWT сессий (`openssl rand -base64 32`)                                            |
+| `NEXTAUTH_URL`               | нет          | Публичный URL приложения. Если не задан — определяется автоматически из заголовка `Host`             |
+| `AUTH_TRUST_HOST`            | нет          | `true` — доверять заголовку `Host`. Автоматически включено в конфиге, переменная для явного контроля |
 
 > **OIDC redirect URI**, который нужно зарегистрировать у провайдера:
 > `{NEXTAUTH_URL}/api/auth/callback/oidc`
@@ -118,40 +119,108 @@ bun start
 
 ## Docker
 
-### Сборка образа
+Образ публикуется на GitHub Container Registry:
 
-```bash
-docker build -t telemt-frontend .
+```
+ghcr.io/itlabsio/telemt-ui:latest
+ghcr.io/itlabsio/telemt-ui:1.2.3
 ```
 
-### Запуск контейнера
+Поддерживаются платформы `linux/amd64` и `linux/arm64`.
+
+### Сборка образа локально
 
 ```bash
-# Один сервер
-docker run -p 3000:3000 \
-  -e TELEMT_API_BASE_URL=http://telemt:9091 \
-  -e TELEMT_API_AUTH_HEADER=your-secret \
-  -e OIDC_ISSUER=https://auth.example.com \
-  -e OIDC_CLIENT_ID=telemt-frontend \
-  -e OIDC_CLIENT_SECRET=... \
-  -e AUTH_SECRET=... \
-  -e NEXTAUTH_URL=https://telemt.example.com \
-  telemt-frontend
+docker build -t telemt-ui .
+```
 
-# Несколько серверов
-docker run -p 3000:3000 \
-  -e TELEMT_API_BASE_URL_1=http://prod:9091 \
-  -e TELEMT_API_AUTH_HEADER_1=prod-secret \
-  -e TELEMT_API_LABEL_1=Production \
-  -e TELEMT_API_BASE_URL_2=http://staging:9091 \
-  -e TELEMT_API_AUTH_HEADER_2=staging-secret \
-  -e TELEMT_API_LABEL_2=Staging \
-  -e OIDC_ISSUER=https://auth.example.com \
-  -e OIDC_CLIENT_ID=telemt-frontend \
-  -e OIDC_CLIENT_SECRET=... \
-  -e AUTH_SECRET=... \
-  -e NEXTAUTH_URL=https://telemt.example.com \
-  telemt-frontend
+### Docker Compose
+
+#### Один сервер
+
+```yaml
+# compose.yml
+services:
+  telemt-ui:
+    image: ghcr.io/itlabsio/telemt-ui:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      TELEMT_API_BASE_URL: http://telemt:9091
+      TELEMT_API_AUTH_HEADER: your-secret
+      OIDC_ISSUER: https://auth.example.com
+      OIDC_CLIENT_ID: telemt-ui
+      OIDC_CLIENT_SECRET: change-me
+      AUTH_SECRET: change-me
+      NEXTAUTH_URL: https://telemt.example.com
+      AUTH_TRUST_HOST: "true"
+```
+
+#### Несколько серверов
+
+```yaml
+# compose.yml
+services:
+  telemt-ui:
+    image: ghcr.io/itlabsio/telemt-ui:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Production backend
+      TELEMT_API_BASE_URL_1: http://prod:9091
+      TELEMT_API_AUTH_HEADER_1: prod-secret
+      TELEMT_API_LABEL_1: Production
+      # Staging backend
+      TELEMT_API_BASE_URL_2: http://staging:9091
+      TELEMT_API_AUTH_HEADER_2: staging-secret
+      TELEMT_API_LABEL_2: Staging
+      # OIDC
+      OIDC_ISSUER: https://auth.example.com
+      OIDC_CLIENT_ID: telemt-ui
+      OIDC_CLIENT_SECRET: change-me
+      AUTH_SECRET: change-me
+      NEXTAUTH_URL: https://telemt.example.com
+      AUTH_TRUST_HOST: "true"
+```
+
+#### С Telemt в одном compose-файле
+
+```yaml
+# compose.yml
+services:
+  # https://github.com/An0nX/telemt-docker
+  telemt:
+    image: whn0thacked/telemt-docker:latest
+    restart: unless-stopped
+    volumes:
+      - ./config.toml:/etc/telemt/config.toml:rw
+    ports:
+      - "443:443"
+
+  telemt-ui:
+    image: ghcr.io/itlabsio/telemt-ui:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      TELEMT_API_BASE_URL: http://telemt:9091
+      TELEMT_API_AUTH_HEADER: your-secret
+      OIDC_ISSUER: https://auth.example.com
+      OIDC_CLIENT_ID: telemt-ui
+      OIDC_CLIENT_SECRET: change-me
+      AUTH_TRUST_HOST: "true"
+      AUTH_SECRET: change-me
+      NEXTAUTH_URL: https://telemt.example.com
+    depends_on:
+      - telemt
+```
+
+Запуск:
+
+```bash
+docker compose up -d
 ```
 
 ### GitHub Actions

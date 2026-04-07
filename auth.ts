@@ -32,6 +32,12 @@ function isGroupAllowed(groups: unknown): boolean {
 }
 
 const config: NextAuthConfig = {
+  // Trust the Host header from the incoming request.
+  // Required when the app is accessed via an IP address, a non-standard port,
+  // or behind a reverse proxy that does not set NEXTAUTH_URL.
+  // Equivalent to setting AUTH_TRUST_HOST=true in the environment.
+  trustHost: true,
+
   providers: [
     {
       id: "oidc",
