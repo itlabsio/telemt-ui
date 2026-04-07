@@ -6,9 +6,84 @@ on:
       - "v*"
 
 jobs:
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous tag to use as the range start.
+          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | sed -n '2p')
+          CURRENT_TAG=${GITHUB_REF_NAME}
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+          else
+            RANGE="${CURRENT_TAG}"
+          fi
+
+          # Build changelog grouped by conventional commit type.
+          {
+            echo "## What's Changed"
+            echo ""
+
+            FEATURES=$(git log "$RANGE" --pretty="format:- %s (%h)" --no-merges | grep -E '^- feat' || true)
+            FIXES=$(git log "$RANGE" --pretty="format:- %s (%h)" --no-merges | grep -E '^- fix' || true)
+            OTHERS=$(git log "$RANGE" --pretty="format:- %s (%h)" --no-merges | grep -vE '^- (feat|fix)' || true)
+
+            if [ -n "$FEATURES" ]; then
+              echo "### Features"
+              echo "$FEATURES"
+              echo ""
+            fi
+
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+
+            if [ -n "$OTHERS" ]; then
+              echo "### Other Changes"
+              echo "$OTHERS"
+              echo ""
+            fi
+
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full diff:** [$PREV_TAG → $CURRENT_TAG](../../compare/${PREV_TAG}...${CURRENT_TAG})"
+            fi
+          } > changelog.md
+
+          cat changelog.md
+          echo "path=changelog.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+          body_path: changelog.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
   build:
     name: Build image
     runs-on: ubuntu-latest
+    needs: release
     permissions:
       contents: read
       packages: write

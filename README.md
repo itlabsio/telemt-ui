@@ -156,15 +156,29 @@ docker run -p 3000:3000 \
 
 ### GitHub Actions
 
-При создании тега `v*` образ автоматически собирается и публикуется в GHCR:
+При создании тега `v*` запускается два последовательных job-а:
+
+1. **`release`** — генерирует changelog из коммитов и создаёт GitHub Release.
+2. **`build`** — собирает Docker образ и публикует в GHCR.
 
 ```
-ghcr.io/<owner>/<repo>:v1.2.3
-ghcr.io/<owner>/<repo>:v1.2
+ghcr.io/<owner>/<repo>:1.2.3
+ghcr.io/<owner>/<repo>:1.2
 ghcr.io/<owner>/<repo>:latest
 ```
 
-Для работы workflow нужно включить:
+#### Changelog
+
+Коммиты группируются по [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` → **Features**
+- `fix:` → **Bug Fixes**
+- остальные → **Other Changes**
+
+Тег с суффиксом (например `v1.0.0-rc.1`) автоматически помечается как pre-release.
+
+#### Требования
+
+В настройках репозитория включить:
 `Settings → Actions → General → Workflow permissions → Read and write permissions`
 
 ## Kubernetes
