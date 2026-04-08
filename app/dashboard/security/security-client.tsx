@@ -32,7 +32,7 @@ export default function SecurityClient() {
 
   const { data: posture, mutate: m1 } = useSWRData(`${serverIndex}:posture`, api.securityPosture);
   const { data: whitelist, mutate: m2 } = useSWRData(`${serverIndex}:whitelist`, api.securityWhitelist);
-  const { data: limits, mutate: m3 } = useSWRData(
+  const { mutate: m3 } = useSWRData(
     `${serverIndex}:effectiveLimits`,
     api.runtimeUpstreamQuality
   );
