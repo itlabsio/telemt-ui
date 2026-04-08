@@ -119,7 +119,7 @@ export function EditUserDialog({
     return Object.keys(next).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     // user is guaranteed non-null here: the dialog is only rendered when user !== null
     // and the early return above catches the null case before JSX is produced.
