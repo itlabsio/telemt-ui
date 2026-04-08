@@ -63,6 +63,13 @@ export function CreateUserDialog({
     };
   }
 
+  function validateNum(val: string): boolean {
+    const trimmed = val.trim();
+    if (trimmed === "") return true;
+    const n = Number(trimmed);
+    return !isNaN(n) && Number.isInteger(n) && n >= 0;
+  }
+
   function validate(): boolean {
     const next: Partial<FormState> = {};
     if (!form.username.trim()) {
@@ -76,13 +83,13 @@ export function CreateUserDialog({
     if (form.user_ad_tag && !/^[0-9a-fA-F]{32}$/.test(form.user_ad_tag)) {
       next.user_ad_tag = "Must be exactly 32 hex characters";
     }
-    if (form.max_tcp_conns && (isNaN(Number(form.max_tcp_conns)) || Number(form.max_tcp_conns) < 0)) {
+    if (!validateNum(form.max_tcp_conns)) {
       next.max_tcp_conns = "Must be a non-negative integer";
     }
-    if (form.max_unique_ips && (isNaN(Number(form.max_unique_ips)) || Number(form.max_unique_ips) < 0)) {
+    if (!validateNum(form.max_unique_ips)) {
       next.max_unique_ips = "Must be a non-negative integer";
     }
-    if (form.data_quota_bytes && (isNaN(Number(form.data_quota_bytes)) || Number(form.data_quota_bytes) < 0)) {
+    if (!validateNum(form.data_quota_bytes)) {
       next.data_quota_bytes = "Must be a non-negative integer";
     }
     setErrors(next);
@@ -100,10 +107,14 @@ export function CreateUserDialog({
           username: form.username.trim(),
           ...(form.secret ? { secret: form.secret } : {}),
           ...(form.user_ad_tag ? { user_ad_tag: form.user_ad_tag } : {}),
-          ...(form.max_tcp_conns ? { max_tcp_conns: Number(form.max_tcp_conns) } : {}),
-          ...(form.max_unique_ips ? { max_unique_ips: Number(form.max_unique_ips) } : {}),
-          ...(form.data_quota_bytes ? { data_quota_bytes: Number(form.data_quota_bytes) } : {}),
-          ...(form.expiration_rfc3339 ? { expiration_rfc3339: form.expiration_rfc3339 } : {}),
+          ...(form.max_tcp_conns.trim() ? { max_tcp_conns: Number(form.max_tcp_conns.trim()) } : {}),
+          ...(form.max_unique_ips.trim() ? { max_unique_ips: Number(form.max_unique_ips.trim()) } : {}),
+          ...(form.data_quota_bytes.trim()
+            ? { data_quota_bytes: Math.round(Number(form.data_quota_bytes.trim()) * 1024 * 1024) }
+            : {}),
+          ...(form.expiration_rfc3339
+            ? { expiration_rfc3339: new Date(form.expiration_rfc3339).toISOString() }
+            : {}),
         },
         currentRevision
       );
@@ -223,9 +234,10 @@ export function CreateUserDialog({
           <div className="grid grid-cols-2 gap-3">
             <Input
               id="data_quota_bytes"
-              label="Data quota (bytes)"
+              label="Data quota (MB)"
               type="number"
               min={0}
+              step="any"
               placeholder="Unlimited"
               {...field("data_quota_bytes")}
             />

@@ -20,6 +20,8 @@ export function Input({ label, error, className, id, ...props }: InputProps) {
           "placeholder:text-[var(--color-muted-foreground)]",
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ring)]",
           "disabled:cursor-not-allowed disabled:opacity-50",
+          // Make the native datetime-local calendar/clock picker icon visible on dark backgrounds.
+          "[&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-60 [&::-webkit-calendar-picker-indicator]:cursor-pointer",
           error && "border-[var(--color-destructive)]",
           className
         )}
