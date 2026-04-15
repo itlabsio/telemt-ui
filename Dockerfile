@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.11 AS base
+FROM oven/bun:1.3.12 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -12,7 +12,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
-FROM oven/bun:1.3.11-alpine AS runner
+FROM oven/bun:1.3.12-alpine AS runner
 WORKDIR /app
 RUN apk upgrade
 ENV NEXT_TELEMETRY_DISABLED=1
