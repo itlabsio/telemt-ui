@@ -10,6 +10,7 @@ import {
   BarChart3,
   ShieldCheck,
   Shield,
+  Settings,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -22,6 +23,7 @@ const NAV_BASES = [
   { href: "/dashboard/runtime", label: "Runtime", icon: Activity },
   { href: "/dashboard/stats", label: "Statistics", icon: BarChart3 },
   { href: "/dashboard/security", label: "Security", icon: ShieldCheck },
+  { href: "/dashboard/config", label: "Config", icon: Settings },
 ];
 
 interface SidebarProps {

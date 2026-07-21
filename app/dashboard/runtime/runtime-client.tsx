@@ -37,10 +37,11 @@ export default function RuntimeClient() {
   const { data: edgeConn, mutate: m6 } = useSWRData(`${serverIndex}:edgeConn`, api.runtimeEdgeConnectionsSummary);
   const { data: events, mutate: m7 } = useSWRData(`${serverIndex}:events`, () => api.runtimeEdgeEvents(100));
   const { data: init, mutate: m8 } = useSWRData(`${serverIndex}:init`, api.runtimeInitialization);
+  const { data: limits, mutate: m9 } = useSWRData(`${serverIndex}:limits`, api.effectiveLimits);
 
   const refresh = useCallback(() => {
-    m1(); m2(); m3(); m4(); m5(); m6(); m7(); m8();
-  }, [m1, m2, m3, m4, m5, m6, m7, m8]);
+    m1(); m2(); m3(); m4(); m5(); m6(); m7(); m8(); m9();
+  }, [m1, m2, m3, m4, m5, m6, m7, m8, m9]);
 
   function selftestState(state: string): "ok" | "warning" | "error" | "unknown" {
     if (state === "ok") return "ok";
@@ -185,6 +186,84 @@ export default function RuntimeClient() {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Effective limits */}
+        {limits && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Effective Limits</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-[var(--color-foreground)]">Timeouts</p>
+                  <div className="space-y-1 text-xs">
+                    {[
+                      { label: "Handshake", value: `${limits.timeouts.client_handshake_secs}s` },
+                      { label: "First-byte idle", value: `${limits.timeouts.client_first_byte_idle_secs}s` },
+                      { label: "TG connect", value: `${limits.timeouts.tg_connect_secs}s` },
+                      { label: "Keepalive", value: `${limits.timeouts.client_keepalive_secs}s` },
+                      { label: "ACK", value: `${limits.timeouts.client_ack_secs}s` },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-[var(--color-muted-foreground)]">{label}</span>
+                        <span className="font-mono">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-[var(--color-foreground)]">Upstream</p>
+                  <div className="space-y-1 text-xs">
+                    {[
+                      { label: "Retry attempts", value: limits.upstream.connect_retry_attempts },
+                      { label: "Retry backoff", value: `${limits.upstream.connect_retry_backoff_ms}ms` },
+                      { label: "Connect budget", value: `${limits.upstream.connect_budget_ms}ms` },
+                      { label: "Unhealthy threshold", value: limits.upstream.unhealthy_fail_threshold },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-[var(--color-muted-foreground)]">{label}</span>
+                        <span className="font-mono">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-[var(--color-foreground)]">Middle Proxy</p>
+                  <div className="space-y-1 text-xs">
+                    {[
+                      { label: "Floor mode", value: limits.middle_proxy.floor_mode },
+                      { label: "Writer pick", value: limits.middle_proxy.writer_pick_mode },
+                      { label: "Reconnect fast retries", value: limits.middle_proxy.reconnect_fast_retry_count },
+                      { label: "ME→DC fallback", value: limits.middle_proxy.me2dc_fallback ? "on" : "off" },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-[var(--color-muted-foreground)]">{label}</span>
+                        <span className="font-mono">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-[var(--color-foreground)]">Per-user Policy</p>
+                  <div className="space-y-1 text-xs">
+                    {[
+                      { label: "Unique-IP mode", value: limits.user_ip_policy.mode },
+                      { label: "Unique-IP window", value: `${limits.user_ip_policy.window_secs}s` },
+                      { label: "Unique-IP default", value: limits.user_ip_policy.global_each },
+                      { label: "TCP conns default", value: limits.user_tcp_policy.global_each },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-[var(--color-muted-foreground)]">{label}</span>
+                        <span className="font-mono">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

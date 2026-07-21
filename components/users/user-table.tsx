@@ -9,6 +9,10 @@ import {
   ChevronUp,
   Link as LinkIcon,
   Wifi,
+  Power,
+  PowerOff,
+  KeyRound,
+  RotateCcw,
 } from "lucide-react";
 import type { UserInfo } from "@/types/api";
 import {
@@ -29,9 +33,22 @@ interface UserTableProps {
   readOnly: boolean;
   onEdit: (user: UserInfo) => void;
   onDelete: (user: UserInfo) => void;
+  onEnable: (user: UserInfo) => void;
+  onDisable: (user: UserInfo) => void;
+  onRotateSecret: (user: UserInfo) => void;
+  onResetQuota: (user: UserInfo) => void;
 }
 
-export function UserTable({ users, readOnly, onEdit, onDelete }: UserTableProps) {
+export function UserTable({
+  users,
+  readOnly,
+  onEdit,
+  onDelete,
+  onEnable,
+  onDisable,
+  onRotateSecret,
+  onResetQuota,
+}: UserTableProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   function toggle(username: string) {
@@ -82,9 +99,13 @@ export function UserTable({ users, readOnly, onEdit, onDelete }: UserTableProps)
               </TableCell>
 
               <TableCell>
-                <span className="font-mono text-sm font-medium text-[var(--color-foreground)]">
-                  {user.username}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-sm font-medium text-[var(--color-foreground)]">
+                    {user.username}
+                  </span>
+                  {!user.enabled && <Badge variant="destructive">disabled</Badge>}
+                  {!user.in_runtime && <Badge variant="outline">pending</Badge>}
+                </div>
               </TableCell>
 
               <TableCell>
@@ -132,6 +153,34 @@ export function UserTable({ users, readOnly, onEdit, onDelete }: UserTableProps)
                 <div className="flex items-center justify-end gap-1">
                   {!readOnly && (
                     <>
+                      <Tooltip content={user.enabled ? "Disable user" : "Enable user"}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => (user.enabled ? onDisable(user) : onEnable(user))}
+                          className={
+                            user.enabled
+                              ? undefined
+                              : "text-[var(--color-success)] hover:text-[var(--color-success)]"
+                          }
+                        >
+                          {user.enabled ? (
+                            <PowerOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Power className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Rotate secret">
+                        <Button variant="ghost" size="icon" onClick={() => onRotateSecret(user)}>
+                          <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Reset quota">
+                        <Button variant="ghost" size="icon" onClick={() => onResetQuota(user)}>
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                      </Tooltip>
                       <Tooltip content="Edit user">
                         <Button
                           variant="ghost"

@@ -261,15 +261,36 @@ livenessProbe:
   periodSeconds: 10
 
 readinessProbe:
-  httpGet:
-    path: /api/health/ready
-    port: 3000
+  exec:
+    command:
+      - bun
+      - -e
+      - |
+        try {
+          const r = await fetch("http://127.0.0.1:3000/api/health/ready");
+          console.log(await r.text());
+          if (!r.ok) process.exit(1);
+        } catch (e) {
+          console.log(String(e));
+          process.exit(1);
+        }
   initialDelaySeconds: 5
   periodSeconds: 10
   failureThreshold: 3
 ```
 
-`/api/health/ready` проверяет доступность Telemt backend — pod не получит трафик пока backend недоступен.
+`/api/health/ready` проверяет не просто доступность Telemt backend, а его реальную готовность принимать
+трафик (`GET /v1/health/ready` бэкенда): admission gate открыт и хотя бы один upstream здоров. При отказе
+эндпоинт возвращает `503` и JSON с `reason` (`admission_closed` или `no_healthy_upstreams`).
+
+Готовность специально проверяется через `exec`, а не `httpGet`. Для `httpGet`-проб kubelet пишет в Events
+пода только код ответа (`Readiness probe failed: HTTP probe failed with statuscode: 503`) — тело ответа
+недоступно. `exec`-проба перехватывает stdout/stderr команды и кладёт их в тот же Event, поэтому
+`kubectl describe pod` показывает настоящую причину, а не просто "failed":
+
+```
+Warning  Unhealthy  ...  Readiness probe failed: {"ok":false,"status":"not_ready","reason":"no_healthy_upstreams","healthy_upstreams":0,"total_upstreams":2}
+```
 
 ## Структура проекта
 

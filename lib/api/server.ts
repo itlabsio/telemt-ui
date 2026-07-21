@@ -6,6 +6,7 @@ import type {
   SuccessEnvelope,
   ApiResponse,
   HealthData,
+  HealthReadyData,
   SystemInfoData,
   RuntimeGatesData,
   RuntimeInitializationData,
@@ -25,10 +26,21 @@ import type {
   RuntimeMeSelftestData,
   RuntimeEdgeConnectionsSummaryData,
   RuntimeEdgeEventsData,
+  RuntimeEdgeTlsFingerprintsData,
   UserInfo,
+  UserActiveIps,
   CreateUserRequest,
   CreateUserResponse,
   PatchUserRequest,
+  DeleteUserResponse,
+  RotateSecretRequest,
+  ResetUserQuotaResponse,
+  ConfigData,
+  PatchConfigRequest,
+  PatchConfigResponse,
+  ReloadRequest,
+  ReloadAccepted,
+  ReloadStatus,
 } from "@/types/api";
 
 import { primaryBackend, getBackend } from "@/lib/backends";
@@ -119,6 +131,7 @@ function makeApi(baseUrl: string, authHeader: string) {
 
   return {
     health: () => get<HealthData>("/v1/health"),
+    healthReady: () => get<HealthReadyData>("/v1/health/ready"),
     systemInfo: () => get<SystemInfoData>("/v1/system/info"),
     runtimeGates: () => get<RuntimeGatesData>("/v1/runtime/gates"),
     runtimeInitialization: () =>
@@ -147,9 +160,14 @@ function makeApi(baseUrl: string, authHeader: string) {
       get<RuntimeEdgeEventsData>(
         `/v1/runtime/events/recent${limit !== undefined ? `?limit=${limit}` : ""}`
       ),
+    runtimeEdgeTlsFingerprints: (limit?: number) =>
+      get<RuntimeEdgeTlsFingerprintsData>(
+        `/v1/runtime/tls-fingerprints${limit !== undefined ? `?limit=${limit}` : ""}`
+      ),
     listUsers: () => get<UserInfo[]>("/v1/users"),
     getUser: (username: string) =>
       get<UserInfo>(`/v1/users/${encodeURIComponent(username)}`),
+    usersActiveIps: () => get<UserActiveIps[]>("/v1/stats/users/active-ips"),
     createUser: (req: CreateUserRequest, revision?: string) =>
       mutate<CreateUserRequest, CreateUserResponse>("POST", "/v1/users", req, revision),
     patchUser: (username: string, req: PatchUserRequest, revision?: string) =>
@@ -160,12 +178,46 @@ function makeApi(baseUrl: string, authHeader: string) {
         revision
       ),
     deleteUser: (username: string, revision?: string) =>
-      mutate<undefined, string>(
+      mutate<undefined, DeleteUserResponse>(
         "DELETE",
         `/v1/users/${encodeURIComponent(username)}`,
         undefined,
         revision
       ),
+    rotateSecret: (username: string, req?: RotateSecretRequest, revision?: string) =>
+      mutate<RotateSecretRequest | undefined, CreateUserResponse>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/rotate-secret`,
+        req,
+        revision
+      ),
+    enableUser: (username: string, revision?: string) =>
+      mutate<undefined, UserInfo>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/enable`,
+        undefined,
+        revision
+      ),
+    disableUser: (username: string, revision?: string) =>
+      mutate<undefined, UserInfo>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/disable`,
+        undefined,
+        revision
+      ),
+    resetUserQuota: (username: string, revision?: string) =>
+      mutate<undefined, ResetUserQuotaResponse>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/reset-quota`,
+        undefined,
+        revision
+      ),
+    getConfig: () => get<ConfigData>("/v1/config"),
+    patchConfig: (req: PatchConfigRequest, revision?: string) =>
+      mutate<PatchConfigRequest, PatchConfigResponse>("PATCH", "/v1/config", req, revision),
+    systemReload: (req?: ReloadRequest, revision?: string) =>
+      mutate<ReloadRequest | undefined, ReloadAccepted>("POST", "/v1/system/reload", req, revision),
+    reloadStatus: (id: number) => get<ReloadStatus>(`/v1/system/reload/${id}`),
   };
 }
 

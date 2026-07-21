@@ -9,14 +9,23 @@ import {
   Unlock,
   Eye,
   AlertTriangle,
+  Fingerprint,
 } from "lucide-react";
 import { Topbar, RefreshButton } from "@/components/layout/topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { StatusIndicator } from "@/components/dashboard/status-indicator";
 import { createBrowserApi } from "@/lib/api/browser";
 import { useServerIndex } from "@/lib/use-server-index";
-import { formatEpoch } from "@/lib/fmt";
+import { formatEpoch, formatNum } from "@/lib/fmt";
 
 const POLL = 15_000;
 
@@ -36,10 +45,13 @@ export default function SecurityClient() {
     `${serverIndex}:effectiveLimits`,
     api.runtimeUpstreamQuality
   );
+  const { data: fingerprints, mutate: m4 } = useSWRData(`${serverIndex}:tlsFingerprints`, () =>
+    api.runtimeEdgeTlsFingerprints(20)
+  );
 
   const refresh = useCallback(() => {
-    m1(); m2(); m3();
-  }, [m1, m2, m3]);
+    m1(); m2(); m3(); m4();
+  }, [m1, m2, m3, m4]);
 
   return (
     <>
@@ -199,6 +211,89 @@ export default function SecurityClient() {
               ) : (
                 <p className="text-sm text-[var(--color-muted-foreground)]">
                   Whitelist is disabled. All source IPs can access the API.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* TLS fingerprints (JA3/JA4) */}
+        {fingerprints && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Fingerprint className="h-4 w-4" />
+                TLS Fingerprints (JA3/JA4)
+                {fingerprints.data && (
+                  <span className="ml-auto text-xs font-normal text-[var(--color-muted-foreground)]">
+                    snapshot: {formatEpoch(fingerprints.generated_at_epoch_secs)}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {fingerprints.data ? (
+                fingerprints.data.by_fingerprint.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>JA3</TableHead>
+                            <TableHead>JA4</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Auth OK</TableHead>
+                            <TableHead>Bad/probe</TableHead>
+                            <TableHead>Last seen</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {fingerprints.data.by_fingerprint.map((row) => (
+                            <TableRow key={row.ja3 + row.ja4}>
+                              <TableCell className="font-mono text-xs">{row.ja3}</TableCell>
+                              <TableCell className="font-mono text-xs">{row.ja4}</TableCell>
+                              <TableCell className="tabular-nums">{formatNum(row.total)}</TableCell>
+                              <TableCell className="tabular-nums text-[var(--color-success)]">
+                                {formatNum(row.auth_success)}
+                              </TableCell>
+                              <TableCell
+                                className={`tabular-nums ${row.bad_or_probe > 0 ? "text-[var(--color-warning)]" : ""}`}
+                              >
+                                {formatNum(row.bad_or_probe)}
+                              </TableCell>
+                              <TableCell className="text-xs text-[var(--color-muted-foreground)]">
+                                {formatEpoch(row.last_seen_epoch_secs)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs text-[var(--color-muted-foreground)]">
+                      <span>Retention: {fingerprints.data.retention_secs}s</span>
+                      <span>Capacity: {fingerprints.data.capacity}</span>
+                      {fingerprints.data.dropped_total > 0 && (
+                        <span className="text-[var(--color-warning)]">
+                          {formatNum(fingerprints.data.dropped_total)} dropped
+                        </span>
+                      )}
+                      {fingerprints.data.parse_error_total > 0 && (
+                        <span className="text-[var(--color-warning)]">
+                          {formatNum(fingerprints.data.parse_error_total)} parse errors
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    No ClientHello fingerprints observed yet.
+                  </p>
+                )
+              ) : (
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  {fingerprints.reason === "feature_disabled"
+                    ? "Enable server.api.runtime_edge_enabled for TLS fingerprint tracking."
+                    : "Loading…"}
                 </p>
               )}
             </CardContent>

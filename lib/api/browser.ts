@@ -6,9 +6,11 @@ import type {
   ApiResponse,
   SuccessEnvelope,
   HealthData,
+  HealthReadyData,
   SystemInfoData,
   RuntimeGatesData,
   RuntimeInitializationData,
+  EffectiveLimitsData,
   SummaryData,
   ZeroAllData,
   UpstreamsData,
@@ -22,12 +24,23 @@ import type {
   RuntimeMeSelftestData,
   RuntimeEdgeConnectionsSummaryData,
   RuntimeEdgeEventsData,
+  RuntimeEdgeTlsFingerprintsData,
   SecurityPostureData,
   SecurityWhitelistData,
   UserInfo,
+  UserActiveIps,
   CreateUserRequest,
   CreateUserResponse,
   PatchUserRequest,
+  DeleteUserResponse,
+  RotateSecretRequest,
+  ResetUserQuotaResponse,
+  ConfigData,
+  PatchConfigRequest,
+  PatchConfigResponse,
+  ReloadRequest,
+  ReloadAccepted,
+  ReloadStatus,
 } from "@/types/api";
 
 // Returns the proxy base URL for a given backend index.
@@ -103,9 +116,11 @@ export function createBrowserApi(serverIndex: number) {
 
   return {
     health: () => g<HealthData>("/v1/health"),
+    healthReady: () => g<HealthReadyData>("/v1/health/ready"),
     systemInfo: () => g<SystemInfoData>("/v1/system/info"),
     runtimeGates: () => g<RuntimeGatesData>("/v1/runtime/gates"),
     runtimeInitialization: () => g<RuntimeInitializationData>("/v1/runtime/initialization"),
+    effectiveLimits: () => g<EffectiveLimitsData>("/v1/limits/effective"),
     statsSummary: () => g<SummaryData>("/v1/stats/summary"),
     statsZeroAll: () => g<ZeroAllData>("/v1/stats/zero/all"),
     statsUpstreams: () => g<UpstreamsData>("/v1/stats/upstreams"),
@@ -123,10 +138,15 @@ export function createBrowserApi(serverIndex: number) {
       g<RuntimeEdgeEventsData>(
         `/v1/runtime/events/recent${limit !== undefined ? `?limit=${limit}` : ""}`
       ),
+    runtimeEdgeTlsFingerprints: (limit?: number) =>
+      g<RuntimeEdgeTlsFingerprintsData>(
+        `/v1/runtime/tls-fingerprints${limit !== undefined ? `?limit=${limit}` : ""}`
+      ),
     securityPosture: () => g<SecurityPostureData>("/v1/security/posture"),
     securityWhitelist: () => g<SecurityWhitelistData>("/v1/security/whitelist"),
     listUsers: () => g<UserInfo[]>("/v1/users"),
     getUser: (username: string) => g<UserInfo>(`/v1/users/${encodeURIComponent(username)}`),
+    usersActiveIps: () => g<UserActiveIps[]>("/v1/stats/users/active-ips"),
     createUser: (req: CreateUserRequest, ifMatch?: string) =>
       m<CreateUserRequest, CreateUserResponse>("POST", "/v1/users", req, ifMatch),
     patchUser: (username: string, req: PatchUserRequest, ifMatch?: string) =>
@@ -137,12 +157,63 @@ export function createBrowserApi(serverIndex: number) {
         ifMatch
       ),
     deleteUser: (username: string, ifMatch?: string) =>
-      m<undefined, string>(
+      m<undefined, DeleteUserResponse>(
         "DELETE",
         `/v1/users/${encodeURIComponent(username)}`,
         undefined,
         ifMatch
       ),
+    rotateSecret: (username: string, req?: RotateSecretRequest, ifMatch?: string) =>
+      m<RotateSecretRequest | undefined, CreateUserResponse>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/rotate-secret`,
+        req,
+        ifMatch
+      ),
+    enableUser: (username: string, ifMatch?: string) =>
+      m<undefined, UserInfo>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/enable`,
+        undefined,
+        ifMatch
+      ),
+    disableUser: (username: string, ifMatch?: string) =>
+      m<undefined, UserInfo>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/disable`,
+        undefined,
+        ifMatch
+      ),
+    resetUserQuota: (username: string, ifMatch?: string) =>
+      m<undefined, ResetUserQuotaResponse>(
+        "POST",
+        `/v1/users/${encodeURIComponent(username)}/reset-quota`,
+        undefined,
+        ifMatch
+      ),
+    getConfig: () => g<ConfigData>("/v1/config"),
+    patchConfig: (
+      req: PatchConfigRequest,
+      ifMatch?: string,
+      reload?: { mode: "instant" | "drain"; timeoutSecs?: number; failurePolicy?: "keep_new" | "rollback" }
+    ) => {
+      const params = new URLSearchParams();
+      if (reload) {
+        params.set("reload", reload.mode);
+        if (reload.timeoutSecs !== undefined) params.set("timeout_secs", String(reload.timeoutSecs));
+        if (reload.failurePolicy) params.set("failure_policy", reload.failurePolicy);
+      }
+      const qs = params.toString();
+      return m<PatchConfigRequest, PatchConfigResponse>(
+        "PATCH",
+        `/v1/config${qs ? `?${qs}` : ""}`,
+        req,
+        ifMatch
+      );
+    },
+    systemReload: (req?: ReloadRequest, ifMatch?: string) =>
+      m<ReloadRequest | undefined, ReloadAccepted>("POST", "/v1/system/reload", req, ifMatch),
+    reloadStatus: (id: number) => g<ReloadStatus>(`/v1/system/reload/${id}`),
   };
 }
 

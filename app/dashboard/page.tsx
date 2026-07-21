@@ -38,8 +38,9 @@ export default async function DashboardPage({
   const serverIndex = srv !== undefined && /^\d+$/.test(srv) ? Number(srv) : 0;
   const api = createServerApi(serverIndex);
 
-  const [health, systemInfo, gates, summary, minimalAll] = await Promise.all([
+  const [health, healthReady, systemInfo, gates, summary, minimalAll] = await Promise.all([
     safeGet(api.health()),
+    safeGet(api.healthReady()),
     safeGet(api.systemInfo()),
     safeGet(api.runtimeGates()),
     safeGet(api.statsSummary()),
@@ -48,7 +49,13 @@ export default async function DashboardPage({
 
   const isHealthy =
     health?.status === "ok" &&
-    (gates?.accepting_new_connections ?? false);
+    (gates?.accepting_new_connections ?? false) &&
+    (healthReady?.ready ?? true);
+
+  const READY_REASON_LABELS: Record<string, string> = {
+    admission_closed: "Admission gate is closed — startup not finished or a fallback reroute is active.",
+    no_healthy_upstreams: "No configured upstream is currently healthy.",
+  };
 
   const coveragePct = minimalAll?.data?.me_writers?.summary?.coverage_pct ?? null;
   const coverageVariant =
@@ -75,19 +82,28 @@ export default async function DashboardPage({
         {/* Health banner */}
         {health && (
           <div
-            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${isHealthy
+            className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${isHealthy
               ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[var(--color-success)]"
               : "border-[var(--color-destructive)]/25 bg-[var(--color-destructive)]/8 text-[var(--color-destructive)]"
               }`}
           >
             {isHealthy ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
             ) : (
-              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             )}
-            <span className="font-medium">
-              {isHealthy ? "Proxy is healthy and accepting connections" : "Proxy health check failed"}
-            </span>
+            <div>
+              <p className="font-medium">
+                {isHealthy ? "Proxy is healthy and accepting connections" : "Proxy is not ready"}
+              </p>
+              {!isHealthy && healthReady?.reason && (
+                <p className="mt-0.5 text-xs opacity-90">
+                  {READY_REASON_LABELS[healthReady.reason] ?? healthReady.reason}
+                  {" "}
+                  ({healthReady.healthy_upstreams}/{healthReady.total_upstreams} upstreams healthy)
+                </p>
+              )}
+            </div>
             {health.read_only && (
               <Badge variant="warning" className="ml-auto">
                 Read-only

@@ -2,15 +2,17 @@
 
 import { useState, useCallback } from "react";
 import useSWR from "swr";
-import { UserPlus, Search } from "lucide-react";
+import { UserPlus, Search, Wifi } from "lucide-react";
 import { Topbar, RefreshButton } from "@/components/layout/topbar";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UserTable } from "@/components/users/user-table";
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
 import { EditUserDialog } from "@/components/users/edit-user-dialog";
 import { DeleteUserDialog } from "@/components/users/delete-user-dialog";
+import { RotateSecretDialog } from "@/components/users/rotate-secret-dialog";
+import { UserActionDialog, type UserAction } from "@/components/users/user-action-dialog";
 import { createBrowserApi } from "@/lib/api/browser";
 import { useServerIndex } from "@/lib/use-server-index";
 import type { UserInfo, HealthData } from "@/types/api";
@@ -25,6 +27,9 @@ export default function UsersClient() {
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<UserInfo | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserInfo | null>(null);
+  const [rotateSecretUser, setRotateSecretUser] = useState<UserInfo | null>(null);
+  const [actionState, setActionState] = useState<{ action: UserAction; user: UserInfo } | null>(null);
+  const [enableError, setEnableError] = useState<string | null>(null);
 
   const {
     data: usersEnvelope,
@@ -41,7 +46,26 @@ export default function UsersClient() {
     refreshInterval: POLL_INTERVAL,
   });
 
-  const refresh = useCallback(() => mutateUsers(), [mutateUsers]);
+  const { data: activeIpsEnvelope, mutate: mutateActiveIps } = useSWR(
+    [serverIndex, "/v1/stats/users/active-ips"],
+    () => api.usersActiveIps(),
+    { refreshInterval: POLL_INTERVAL }
+  );
+
+  const refresh = useCallback(() => {
+    mutateUsers();
+    mutateActiveIps();
+  }, [mutateUsers, mutateActiveIps]);
+
+  async function handleEnable(user: UserInfo) {
+    setEnableError(null);
+    try {
+      await api.enableUser(user.username, revision);
+      refresh();
+    } catch (err) {
+      setEnableError(err instanceof Error ? err.message : "Failed to enable user");
+    }
+  }
 
   const users = usersEnvelope?.data ?? [];
   const revision = usersEnvelope?.revision;
@@ -107,10 +131,55 @@ export default function UsersClient() {
                 readOnly={readOnly}
                 onEdit={setEditUser}
                 onDelete={setDeleteUser}
+                onEnable={handleEnable}
+                onDisable={(user) => setActionState({ action: "disable", user })}
+                onRotateSecret={setRotateSecretUser}
+                onResetQuota={(user) => setActionState({ action: "reset-quota", user })}
               />
+            )}
+            {enableError && (
+              <p className="border-t border-[var(--color-border)] px-6 py-3 text-sm text-[var(--color-destructive)]">
+                {enableError}
+              </p>
             )}
           </CardContent>
         </Card>
+
+        {/* Active source IPs across all users */}
+        {activeIpsEnvelope && activeIpsEnvelope.data.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wifi className="h-4 w-4" />
+                Active Source IPs
+                <span className="ml-auto text-xs font-normal text-[var(--color-muted-foreground)]">
+                  {activeIpsEnvelope.data.length} user(s) with active connections
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-72 space-y-2 overflow-y-auto">
+                {activeIpsEnvelope.data.map((row) => (
+                  <div key={row.username} className="flex items-start gap-3 text-sm">
+                    <span className="w-32 shrink-0 truncate font-mono text-[var(--color-foreground)]">
+                      {row.username}
+                    </span>
+                    <div className="flex flex-1 flex-wrap gap-1.5">
+                      {row.active_ips.map((ip) => (
+                        <span
+                          key={ip}
+                          className="rounded bg-[var(--color-secondary)]/50 px-2 py-0.5 font-mono text-xs text-[var(--color-muted-foreground)]"
+                        >
+                          {ip}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <CreateUserDialog
@@ -135,6 +204,25 @@ export default function UsersClient() {
         user={deleteUser}
         onClose={() => setDeleteUser(null)}
         onDeleted={refresh}
+        currentRevision={revision}
+        serverIndex={serverIndex}
+      />
+
+      <RotateSecretDialog
+        open={rotateSecretUser !== null}
+        user={rotateSecretUser}
+        onClose={() => setRotateSecretUser(null)}
+        onRotated={refresh}
+        currentRevision={revision}
+        serverIndex={serverIndex}
+      />
+
+      <UserActionDialog
+        open={actionState !== null}
+        action={actionState?.action ?? null}
+        user={actionState?.user ?? null}
+        onClose={() => setActionState(null)}
+        onDone={refresh}
         currentRevision={revision}
         serverIndex={serverIndex}
       />

@@ -29,6 +29,15 @@ export interface HealthData {
   read_only: boolean;
 }
 
+export interface HealthReadyData {
+  ready: boolean;
+  status: string;
+  reason?: string;
+  admission_open: boolean;
+  healthy_upstreams: number;
+  total_upstreams: number;
+}
+
 // ── System info ───────────────────────────────────────────────────────────────
 
 export interface SystemInfoData {
@@ -99,6 +108,7 @@ export interface RuntimeInitializationData {
 
 export interface EffectiveTimeoutLimits {
   client_handshake_secs: number;
+  client_first_byte_idle_secs: number;
   tg_connect_secs: number;
   client_keepalive_secs: number;
   client_ack_secs: number;
@@ -138,8 +148,13 @@ export interface EffectiveMiddleProxyLimits {
 }
 
 export interface EffectiveUserIpPolicyLimits {
+  global_each: number;
   mode: string;
   window_secs: number;
+}
+
+export interface EffectiveUserTcpPolicyLimits {
+  global_each: number;
 }
 
 export interface EffectiveLimitsData {
@@ -150,6 +165,7 @@ export interface EffectiveLimitsData {
   upstream: EffectiveUpstreamLimits;
   middle_proxy: EffectiveMiddleProxyLimits;
   user_ip_policy: EffectiveUserIpPolicyLimits;
+  user_tcp_policy: EffectiveUserTcpPolicyLimits;
 }
 
 // ── Security ──────────────────────────────────────────────────────────────────
@@ -717,6 +733,40 @@ export interface RuntimeEdgeEventsData {
   data?: RuntimeEdgeEventsPayload;
 }
 
+// ── Runtime edge TLS fingerprints (JA3/JA4) ──────────────────────────────────
+
+export interface RuntimeEdgeTlsFingerprintRow {
+  scope?: string;
+  ja3: string;
+  ja3_raw: string;
+  ja4: string;
+  ja4_raw: string;
+  total: number;
+  auth_success: number;
+  bad_or_probe: number;
+  first_seen_epoch_secs: number;
+  last_seen_epoch_secs: number;
+}
+
+export interface RuntimeEdgeTlsFingerprintsPayload {
+  limit: number;
+  retention_secs: number;
+  capacity: number;
+  dropped_total: number;
+  parse_error_total: number;
+  by_fingerprint: RuntimeEdgeTlsFingerprintRow[];
+  by_ip: RuntimeEdgeTlsFingerprintRow[];
+  by_cidr: RuntimeEdgeTlsFingerprintRow[];
+  by_user: RuntimeEdgeTlsFingerprintRow[];
+}
+
+export interface RuntimeEdgeTlsFingerprintsData {
+  enabled: boolean;
+  reason?: string;
+  generated_at_epoch_secs: number;
+  data?: RuntimeEdgeTlsFingerprintsPayload;
+}
+
 // ── Minimal all ───────────────────────────────────────────────────────────────
 
 export interface MinimalQuarantineData {
@@ -805,18 +855,28 @@ export interface MinimalAllData {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
+export interface TlsDomainLink {
+  domain: string;
+  link: string;
+}
+
 export interface UserLinks {
   classic: string[];
   secure: string[];
   tls: string[];
+  tls_domains: TlsDomainLink[];
 }
 
 export interface UserInfo {
   username: string;
+  enabled: boolean;
+  in_runtime: boolean;
   user_ad_tag?: string;
   max_tcp_conns?: number;
   expiration_rfc3339?: string;
   data_quota_bytes?: number;
+  rate_limit_up_bps?: number;
+  rate_limit_down_bps?: number;
   max_unique_ips?: number;
   current_connections: number;
   active_unique_ips: number;
@@ -827,6 +887,11 @@ export interface UserInfo {
   links: UserLinks;
 }
 
+export interface UserActiveIps {
+  username: string;
+  active_ips: string[];
+}
+
 export interface CreateUserRequest {
   username: string;
   secret?: string;
@@ -834,19 +899,95 @@ export interface CreateUserRequest {
   max_tcp_conns?: number;
   expiration_rfc3339?: string;
   data_quota_bytes?: number;
+  rate_limit_up_bps?: number;
+  rate_limit_down_bps?: number;
   max_unique_ips?: number;
+  enabled?: boolean;
 }
 
 export interface PatchUserRequest {
   secret?: string;
-  user_ad_tag?: string;
-  max_tcp_conns?: number;
-  expiration_rfc3339?: string;
-  data_quota_bytes?: number;
-  max_unique_ips?: number;
+  user_ad_tag?: string | null;
+  max_tcp_conns?: number | null;
+  expiration_rfc3339?: string | null;
+  data_quota_bytes?: number | null;
+  rate_limit_up_bps?: number | null;
+  rate_limit_down_bps?: number | null;
+  max_unique_ips?: number | null;
+  enabled?: boolean | null;
 }
 
 export interface CreateUserResponse {
   user: UserInfo;
   secret: string;
+}
+
+export interface DeleteUserResponse {
+  username: string;
+  in_runtime: boolean;
+}
+
+export interface RotateSecretRequest {
+  secret?: string;
+}
+
+export interface ResetUserQuotaResponse {
+  username: string;
+  used_bytes: number;
+  last_reset_epoch_secs: number;
+}
+
+// ── Config editor ─────────────────────────────────────────────────────────────
+
+export const EDITABLE_CONFIG_SECTIONS = [
+  "general",
+  "timeouts",
+  "censorship",
+  "upstreams",
+  "show_link",
+  "dc_overrides",
+] as const;
+
+export type EditableConfigSection = (typeof EDITABLE_CONFIG_SECTIONS)[number];
+
+export type ConfigData = Partial<Record<EditableConfigSection, Record<string, unknown>>>;
+
+export type PatchConfigRequest = Partial<Record<EditableConfigSection, Record<string, unknown>>>;
+
+export interface ReloadAccepted {
+  reload_id: number;
+  target_generation: number;
+  config_revision: string;
+  state: string;
+  mode: string;
+  failure_policy: string;
+}
+
+export interface PatchConfigResponse {
+  revision: string;
+  restart_required: boolean;
+  runtime_reload_required: boolean;
+  process_restart_required: boolean;
+  deferred_process_fields: string[];
+  changed: string[];
+  reload?: ReloadAccepted;
+}
+
+export interface ReloadRequest {
+  mode?: "instant" | "drain";
+  timeout_secs?: number;
+  failure_policy?: "keep_new" | "rollback";
+}
+
+export interface ReloadStatus {
+  reload_id: number;
+  target_generation: number;
+  config_revision: string;
+  state: string;
+  mode: string;
+  failure_policy: string;
+  finished_at_epoch_secs?: number;
+  error?: string;
+  warnings?: string[];
+  deferred_process_fields?: string[];
 }
