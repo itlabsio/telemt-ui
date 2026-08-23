@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.14 AS base
+FROM oven/bun:1.4.0 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -12,7 +12,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
-FROM oven/bun:1.3.14-alpine AS runner
+FROM oven/bun:1.4.0-alpine AS runner
 WORKDIR /app
 RUN apk upgrade
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -20,7 +20,7 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -u 1001 -S -G nodejs nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# COPY --from=builder /app/public ./public
 USER nextjs
 EXPOSE 3000
 ENV NODE_ENV=production \
